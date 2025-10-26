@@ -15,11 +15,20 @@ import { Domain, PermissionsConfig } from "types/config";
 import Database from "@/model/Database";
 import Controller from "../Controller";
 import { IUserController } from "./IUserController";
+import { UserService } from "@/services/User/UserService";
+import { UserRepository } from "@/repository/User/UserRepository";
 
 const domain: Domain = config.get("domain");
 const permissions: PermissionsConfig = config.get("permissions");
 
 class UserController extends Controller implements IUserController {
+  private userService: UserService;
+
+  constructor(userService: UserService) {
+    super();
+    this.userService = userService;
+  }
+
   public create = async (req: AuthRequest, res: Response) => {
     try {
       const data = req.body;
@@ -43,7 +52,8 @@ class UserController extends Controller implements IUserController {
       );
 
       // check if the user already exists
-      let userData = await Database.User.custom.read.get({ email: data.email });
+      // let userData = await Database.User.custom.read.get({ email: data.email });
+      let userData = await this.userService.getUserByEmail(data.email);
 
       if (userData) {
         // user is already on this account
@@ -297,9 +307,7 @@ class UserController extends Controller implements IUserController {
       utility.validate(data, ["email", "jwt", "password"]);
 
       // verify the user exists
-      const userData = await Database.User.custom.read.get({
-        email: data.email,
-      });
+      const userData = await this.userService.getUserByEmail(data.email);
 
       if (userData) {
         // verify the token
@@ -493,6 +501,7 @@ class UserController extends Controller implements IUserController {
           id: userData.id,
           account: req.account,
         });
+
         await Database.User.custom.account.delete({
           id: userData.id,
           account: req.account,
@@ -516,24 +525,16 @@ class UserController extends Controller implements IUserController {
             userAccounts.findIndex((x) => x.id === req.account),
             1,
           );
-          await Database.User.custom.update.update({
-            id: userData.id,
-            account: req.account,
-            data: { default_account: userAccounts[0].id },
+          await this.userService.updateUser(userData.id, req.account, {
+            default_account: userAccounts[0].id,
           });
         }
       } else {
         // delete the user entirely
-        await Database.User.custom.deleteUser.deleteUser({
-          id: userData.id,
-          account: req.account,
-        });
+        await this.userService.deleteUser(userData.id, req.account);
       }
 
-      await Database.User.custom.account.delete({
-        id: userData.id,
-        account: req.account,
-      }); // un-assign user from this account
+      await this.userService.removeAccountFromUser(userData.id, req.account);
       return this.sendSuccess(res, { message: "User deleted" });
     } catch (error) {
       return this.sendError(res, error);
@@ -564,4 +565,6 @@ class UserController extends Controller implements IUserController {
   };
 }
 
-export default new UserController();
+const userRepository = new UserRepository(Database.User);
+const userService = new UserService(userRepository);
+export default new UserController(userService);

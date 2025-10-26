@@ -10,7 +10,6 @@ import mongoose, {
   UpdateWriteOpResult,
   SortOrder,
 } from "mongoose";
-import MongoBuilder from "../../helper/MongoBuilder";
 
 type PlainDocument<T> = Omit<T, keyof Document>;
 
@@ -63,11 +62,6 @@ export default abstract class Model<T extends Document> {
       query: FilterQuery<T>,
       projection?: ProjectionType<T>,
     ) => Promise<T | null>;
-    paginate: (
-      query: FilterQuery<T>,
-      limit: number,
-      page: number,
-    ) => Promise<T | null>;
     search: (
       options: { filter: string; fields: string[] },
       accountId: string,
@@ -79,12 +73,6 @@ export default abstract class Model<T extends Document> {
     },
     one: async (query, projection = {}) => {
       return await this.model.findOne(query, projection);
-    },
-    paginate: async (query, limit, page) => {
-      const mongo = new MongoBuilder(this.model).match(query);
-      await mongo.addPagination(page, limit);
-      await mongo.run();
-      return await mongo.results();
     },
 
     search: async (
@@ -163,5 +151,5 @@ export default abstract class Model<T extends Document> {
         update: { [key: string]: (...args: any[]) => Promise<any> };
         delete: { [key: string]: (...args: any[]) => Promise<any> };
       }
-    | {} = {};
+    | any = {};
 }
